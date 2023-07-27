@@ -41,6 +41,18 @@ import { developmentLogger, productionLogger } from './logs/winston.config.js';
 import { logMessage } from "./logs/logger.js";
 //========={ Logs }=========
 
+
+//==============================
+//Función para especificar donde está un console.log
+
+const originalLog = console.log;
+console.log = function(...args) {
+    const stack = new Error().stack;
+    const caller = stack.split('\n')[2].trim();
+    originalLog.apply(console, [...args, '\n', caller]);
+}
+//==============================
+
 const app = express();
 
 app.use(express.json());  
@@ -52,20 +64,33 @@ app.use(cookieParser());
 app.use(flash());
 
 const hbs = exphbs.create({
-helpers: {
-debug: function (value) {
-console.log("Current Context");
-console.log("====================");
-console.log(this);
+    helpers: {
+        debug: function (value) {
+            if (process.env.NODE_ENV === 'development') {
+                developmentLogger.log('info', 'Current Context');
+                developmentLogger.log('info', '====================');
+                developmentLogger.log('info', this);
+            } else {
+                productionLogger.log('info', 'Current Context');
+                productionLogger.log('info', '====================');
+                productionLogger.log('info', this);
+            }
 
-if (value) {
-console.log("Value");
-console.log("====================");
-console.log(value);
-}
-},
-},
+            if (value) {
+                if (process.env.NODE_ENV === 'development') {
+                    developmentLogger.log('info', 'Value');
+                    developmentLogger.log('info', '====================');
+                    developmentLogger.log('info', value);
+                } else {
+                    productionLogger.log('info', 'Value');
+                    productionLogger.log('info', '====================');
+                    productionLogger.log('info', value);
+                }
+            }
+        },
+    },
 });
+
 
 app.engine("handlebars", hbs.engine);
 app.set("view engine", "handlebars");
@@ -130,7 +155,14 @@ app.use("/", logsRouter);
 
 
 //========={ Usando socket.io }========
-const server = app.listen(8080,()=>console.log("Listening on 8080"));
+const server = app.listen(8080, () => {
+    if (process.env.NODE_ENV === 'development') {
+        developmentLogger.log('info', 'Listening on 8080');
+    } else {
+        productionLogger.log('info', 'Listening on 8080');
+    }
+});
+
 const io = new Server(server);
 
 app.on('cartUpdated', async cartId => {
@@ -146,7 +178,12 @@ io.emit('cart', cartData.products);
 const messages = [];
 
 io.on("connection", (socket) => {
-    console.log("New client connected");
+
+    if (process.env.NODE_ENV === 'development') {
+        developmentLogger.log('info', 'Nuevo cliente conectado');
+    } else {
+        productionLogger.log('info', 'Nuevo cliente conectado');
+    }
 
     // Leer mensajes del evento:
     socket.on("message", (data) => {
